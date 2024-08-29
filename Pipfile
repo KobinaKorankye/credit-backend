@@ -1,0 +1,26 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+scikit-learn = "==1.4.2"
+numpy = "==1.24.3"
+imbalanced-learn = "==0.12.2"
+pandas = "==2.0.3"
+pydantic = "*"
+joblib = "==1.2.0"
+shap = "==0.45.1"
+numba = "==0.57.1"
+pymongo = "*"
+python-dotenv = "*"
+mongo-migrate = "*"
+sqlalchemy = "*"
+alembic = "*"
+psycopg2-binary = "*"
+fastapi = {extras = ["standard"], version = "*"}
+
+[dev-packages]
+
+[requires]
+python_version = "3.11"
