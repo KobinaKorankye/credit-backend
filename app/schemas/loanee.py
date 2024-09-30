@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 class LoaneeBase(BaseModel):
     status_of_existing_checking_account: str
@@ -28,8 +29,14 @@ class LoaneeBase(BaseModel):
 class LoaneeCreate(LoaneeBase):
     pass
 
+class LoaneeUpdate(LoaneeBase):
+    id: int
+    pass
+
 class LoaneeResponse(LoaneeBase):
     id: int
+    date_created: datetime
+    date_updated: datetime
 
     class Config:
         orm_mode = True

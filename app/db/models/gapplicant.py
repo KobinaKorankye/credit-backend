@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, func
 from app.db.database import Base
 
 class GApplicant(Base):
@@ -25,5 +25,9 @@ class GApplicant(Base):
     number_of_people_being_liable_to_provide_maintenance_for = Column(Integer, nullable=False)
     telephone = Column(String, nullable=False)
     foreign_worker = Column(String, nullable=False)
-    approved = Column(Boolean)
+    status = Column(String, default="pending", nullable=False)
     income = Column(Integer, default=3000)  # Default value
+
+    # New fields for tracking creation and update times
+    date_created = Column(DateTime, default=func.now(), nullable=False)
+    date_updated = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)

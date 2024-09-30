@@ -1,67 +1,108 @@
+import random
+
+def marital_status_sex_decoder(code):
+    result = {}
+
+    if code == 'A91':
+        result['sex'] = 'male'
+        result['marital_status'] = random.choice(['divorced', 'separated'])
+    elif code == 'A92':
+        result['sex'] = 'female'
+        result['marital_status'] = random.choice(['divorced', 'separated', 'married'])
+    elif code == 'A93':
+        result['sex'] = 'male'
+        result['marital_status'] = 'single'
+    elif code == 'A94':
+        result['sex'] = 'male'
+        result['marital_status'] = random.choice(['married', 'widowed'])
+    elif code == 'A95':
+        result['sex'] = 'female'
+        result['marital_status'] = 'single'
+    else:
+        raise ValueError(f"Unknown code: {code}")
+    
+    return result
+
+mapping = {
+    "A11": "Less than 0 GHS",
+    "A12": "Between 0 and 200 GHS",
+    "A13": "200 or more GHS",
+    "A14": "No account",
+    "A30": "No credits all paid",
+    "A31": "All credits paid here",
+    "A32": "Credits paid till now",
+    "A33": "Delay in past",
+    "A34": "Critical other credits",
+    "A40": "Car new",
+    "A41": "Car used",
+    "A42": "Furniture/equipment",
+    "A43": "Radio/TV",
+    "A44": "Domestic appliances",
+    "A45": "Repairs",
+    "A46": "Education",
+    "A47": "Vacation",
+    "A48": "Retraining",
+    "A49": "Business",
+    "A410": "Others",
+    "A61": "Less than 100 GHS",
+    "A62": "Between 100 and 500 GHS",
+    "A63": "Between 500 and 1000 GHS",
+    "A64": "1000 or more GHS",
+    "A65": "Unknown/no savings",
+    "A71": "Unemployed",
+    "A72": "Less than 1 year",
+    "A73": "Between 1 and 4 years",
+    "A74": "Between 4 and 7 years",
+    "A75": "7 or more years",
+    "A91": "male : divorced/separated",
+    "A92": "female : divorced/separated/married",
+    "A93": "male : single",
+    "A94": "male : married/widowed",
+    "A95": "female : single",
+    "A101": "None",
+    "A102": "Co-applicant",
+    "A103": "Guarantor",
+    "A121": "Real estate",
+    "A122": "Building/savings life insurance",
+    "A123": "Car/other",
+    "A124": "Unknown/no property",
+    "A141": "Bank",
+    "A142": "Stores",
+    "A143": "None",
+    "A151": "Rent",
+    "A152": "Own",
+    "A153": "For free",
+    "A171": "Unemployed/unskilled non-resident",
+    "A172": "Unskilled resident",
+    "A173": "Skilled employee/official",
+    "A174": "Management/self-employed/high qualified",
+    "A191": "None",
+    "A192": "Yes, registered",
+    "A201": "Yes",
+    "A202": "No",
+}
+
+def marital_status_sex_encoder(marital_status, sex):
+    sex = sex.strip().lower()
+    marital_status = marital_status.strip().lower()
+    if sex == 'male':
+        if marital_status == 'divorced' or marital_status == 'separated':
+            return 'A91'
+        elif marital_status == 'single':
+            return 'A93'
+        elif marital_status == 'married' or marital_status == 'widowed':
+            return 'A94'
+    elif sex == 'female':
+        if marital_status == 'divorced' or marital_status == 'separated' or marital_status == 'married':
+            return 'A92'
+        elif marital_status == 'single':
+            return 'A95'
+
+
 def convert_to_description(feature_name):
     splits = feature_name.split('_')
     if len(splits)<2:
         return feature_name
-        
-    mapping = {
-        'A11': '< 0 DM',
-        'A12': '0 <= ... < 200 DM',
-        'A13': '... >= 200 DM / salary assignments for at least 1 year',
-        'A14': 'no checking account',
-        'A30': 'no credits taken/ all credits paid back duly',
-        'A31': 'all credits at this bank paid back duly',
-        'A32': 'existing credits paid back duly till now',
-        'A33': 'delay in paying off in the past',
-        'A34': 'critical account/ other credits existing (not at this bank)',
-        'A40': 'car (new)',
-        'A41': 'car (used)',
-        'A42': 'furniture/equipment',
-        'A43': 'radio/television',
-        'A44': 'domestic appliances',
-        'A45': 'repairs',
-        'A46': 'education',
-        'A47': 'vacation',
-        'A48': 'retraining',
-        'A49': 'business',
-        'A410': 'others',
-        'A61': '< 100 DM',
-        'A62': '100 <= ... < 500 DM',
-        'A63': '500 <= ... < 1000 DM',
-        'A64': '... >= 1000 DM',
-        'A65': 'unknown/ no savings account',
-        'A71': 'unemployed',
-        'A72': '< 1 year',
-        'A73': '1 <= ... < 4 years',
-        'A74': '4 <= ... < 7 years',
-        'A75': '... >= 7 years',
-        'A91': 'male : divorced/separated',
-        'A92': 'female : divorced/separated/married',
-        'A93': 'male : single',
-        'A94': 'male : married/widowed',
-        'A95': 'female : single',
-        'A101': 'none',
-        'A102': 'co-applicant',
-        'A103': 'guarantor',
-        'A121': 'real estate',
-        'A122': 'building society savings agreement/ life insurance',
-        'A123': 'car or other, not in attribute 6',
-        'A124': 'unknown / no property',
-        'A141': 'bank',
-        'A142': 'stores',
-        'A143': 'none',
-        'A151': 'rent',
-        'A152': 'own',
-        'A153': 'for free',
-        'A171': 'unemployed/ unskilled - non-resident',
-        'A172': 'unskilled - resident',
-        'A173': 'skilled employee / official',
-        'A174': 'management/ self-employed/ highly qualified employee/ officer',
-        'A191': 'none',
-        'A192': 'yes, registered under the customer\'s name',
-        'A201': 'yes',
-        'A202': 'no'
-    }
-
 
     if mapping.get(splits[-1], 'invalid') != 'invalid':
         return f"{'_'.join(splits[:-1])} [{mapping[splits[-1]]}]"

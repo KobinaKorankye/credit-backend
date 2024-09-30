@@ -1,13 +1,15 @@
 import random
 import shutil
 from typing import Optional
-from app.ml import predict
+from app.ml import predict, predict_lite
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, validator, root_validator
+from typing import List
+from app.constants import marital_status_sex_encoder
 
 from fastapi import FastAPI
-from app.routes import gapplicant, loanee
+from app.routes import gapplicant, loanee, product, loans, loan_applications, fx
 import json
 
 def load_json_as_dict(json_file_path: str) -> dict:
@@ -34,27 +36,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def marital_status_sex_encoder(marital_status, sex):
-    if sex == 'male':
-        if marital_status == 'divorced' or marital_status == 'separated':
-            return 'A91'
-        elif marital_status == 'single':
-            return 'A93'
-        elif marital_status == 'married' or marital_status == 'widowed':
-            return 'A94'
-    elif sex == 'female':
-        if marital_status == 'divorced' or marital_status == 'separated' or marital_status == 'married':
-            return 'A92'
-        elif marital_status == 'single':
-            return 'A95'
-
 class RequestBody(BaseModel):
     person_id: str
+    id: Optional[int] = None
     status_of_existing_checking_account: str
     duration: int
     credit_history: str
     purpose: str
-    credit_amount: int
+    credit_amount: float
     savings_account_bonds: str
     present_employment_since: str
     installment_rate_in_percentage_of_disposable_income: float
@@ -92,6 +81,10 @@ class RequestBody(BaseModel):
 # Include the routers
 app.include_router(gapplicant.router, prefix="/gapplicants", tags=["GApplicants"])
 app.include_router(loanee.router, prefix="/loanees", tags=["Loanees"])
+app.include_router(loans.router, prefix="/loans", tags=["Loans"])
+app.include_router(loan_applications.router, prefix="/loan-applications", tags=["Loan Applications"])
+app.include_router(product.router, prefix="/products", tags=["Products"])
+app.include_router(fx.router, prefix="/fx", tags=["Functions"])
 
 @app.get("/")
 async def root():
@@ -107,6 +100,27 @@ def make_prediction(input: RequestBody):
     try:
         input_dict = {k: [v] for k, v in input.dict().items()}
         prediction = predict(input_dict)
+        return prediction
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+@app.post("/predict-many/")
+def make_prediction(input: List[RequestBody]):
+    try:
+        # Initialize an empty dictionary to accumulate input data
+        input_dict = {}
+        
+        # Loop through each dictionary in the input list
+        for input_item in input:
+            for k, v in input_item.dict().items():
+                # Accumulate values into lists for each key
+                if k not in input_dict:
+                    input_dict[k] = []
+                input_dict[k].append(v)
+
+        # Pass the accumulated dictionary to the predict function
+        prediction = predict_lite(input_dict)
+        
         return prediction
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

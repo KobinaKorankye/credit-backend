@@ -5,7 +5,6 @@ from alembic import context
 
 # Import your base and models
 from app.db.database import Base  # Import Base from your database setup
-from app.db.models import gapplicant, loanee  # Import models to register them with Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, DateTime, func
 from app.db.database import Base
 
 class Loanee(Base):
@@ -27,3 +27,8 @@ class Loanee(Base):
     foreign_worker = Column(String, nullable=False)
     class_ = Column(Integer, nullable=False)  # Avoid using `class` as it's a reserved keyword
     income = Column(Integer, default=3000)  # Default value
+
+    
+    # New fields for tracking creation and update times
+    date_created = Column(DateTime, default=func.now(), nullable=False)
+    date_updated = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)

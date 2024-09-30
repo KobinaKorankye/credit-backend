@@ -19,6 +19,7 @@ sqlalchemy = "*"
 alembic = "*"
 psycopg2-binary = "*"
 fastapi = {extras = ["standard"], version = "*"}
+faker = "*"
 
 [dev-packages]
 

@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 class GApplicantBase(BaseModel):
     status_of_existing_checking_account: str
@@ -22,14 +23,20 @@ class GApplicantBase(BaseModel):
     number_of_people_being_liable_to_provide_maintenance_for: int
     telephone: str
     foreign_worker: str
-    approved: Optional[int] = None
+    status: str = 'pending'
     income: Optional[int] = 3000  # Default value if not provided
 
 class GApplicantCreate(GApplicantBase):
     pass
 
+class GApplicantUpdate(GApplicantBase):
+    id: int
+    pass
+
 class GApplicantResponse(GApplicantBase):
     id: int
+    date_created: datetime
+    date_updated: datetime
 
     class Config:
         orm_mode = True

@@ -4,14 +4,10 @@ from typing import List
 from app.db.database import get_db
 from app.db.models.loanee import Loanee
 from app.db.models.gapplicant import GApplicant
-from app.schemas.gapplicant import GApplicantCreate, GApplicantResponse
+from app.schemas.gapplicant import GApplicantCreate, GApplicantUpdate, GApplicantResponse
 from app.schemas.loanee import LoaneeResponse
 
 router = APIRouter()
-
-data = {
-    "example": "This is example graph data"
-}
 
 # Route to get all GApplicants
 @router.get("/", response_model=List[GApplicantResponse])
@@ -32,7 +28,7 @@ def create_gapplicant(gapplicant_data: GApplicantCreate, db: Session = Depends(g
 
 # Route to update an existing GApplicant
 @router.put("/", response_model=GApplicantResponse)
-def update_gapplicant(gapplicant_data: GApplicantCreate, db: Session = Depends(get_db)):
+def update_gapplicant(gapplicant_data: GApplicantUpdate, db: Session = Depends(get_db)):
     gapplicant = db.query(GApplicant).filter(GApplicant.id == gapplicant_data.id).first()
     
     if not gapplicant:
@@ -44,3 +40,13 @@ def update_gapplicant(gapplicant_data: GApplicantCreate, db: Session = Depends(g
     db.commit()
     db.refresh(gapplicant)
     return gapplicant
+
+@router.delete("/{gapplicant_id}", response_model=GApplicantResponse)
+def delete_gapplicant(gapplicant_id: int, db: Session = Depends(get_db)):
+    gapplicant = db.query(GApplicant).filter(GApplicant.id == gapplicant_id).first()
+    
+    if not gapplicant:
+        raise HTTPException(status_code=404, detail="GApplicant not found")
+    
+    db.delete(gapplicant)
+    db.commit()
