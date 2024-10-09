@@ -20,6 +20,9 @@ alembic = "*"
 psycopg2-binary = "*"
 fastapi = {extras = ["standard"], version = "*"}
 faker = "*"
+celery = "*"
+redis = "*"
+fastapi-socketio = "*"
 
 [dev-packages]
 

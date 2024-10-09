@@ -18,5 +18,8 @@ class Product(Base):
     # Field for specifying filter operations
     filters = Column(JSONB, nullable=True)
 
-    # Field for storing array of objects
+    # Field for storing processing status, set to False by default
+    processing = Column(Boolean, default=False, nullable=False)
+
+    # Field for storing array of eligible customers
     eligible_customers = Column(JSONB, nullable=True)

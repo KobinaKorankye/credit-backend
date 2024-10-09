@@ -23,6 +23,7 @@ class ProductResponse(ProductBase):
     id: int
     date_created: datetime
     date_updated: datetime
+    processing: bool
 
     class Config:
         orm_mode = True
