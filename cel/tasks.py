@@ -12,6 +12,7 @@ import json
 from pydantic import BaseModel
 from typing import Optional
 from decimal import Decimal
+from app.core.config import settings
 
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -267,7 +268,7 @@ def contact_eligible_customers(product_id):
     smtp_host = "smtp.gmail.com"  # For example, Gmail's SMTP server
     smtp_port = 587
     sender_email = "kkorankye@itconsortiumgh.com"  # Replace with your email
-    sender_password = "ulzgwpyvjfvxziez"  # Replace with your email password
+    sender_password = settings.EMAIL_APP_PASS  # Replace with your email password
 
     # Set up the SMTP server
     try:
