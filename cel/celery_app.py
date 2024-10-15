@@ -14,4 +14,4 @@ celery_app.conf.update(
 import cel.tasks
 
 # sudo service redis-server start
-# celery -A cel.celery_app worker --loglevel=info --pool=solo.
+# celery -A cel.celery_app worker --loglevel=info --pool=solo

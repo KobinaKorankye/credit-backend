@@ -12,7 +12,16 @@ import json
 from pydantic import BaseModel
 from typing import Optional
 from decimal import Decimal
+
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from sqlalchemy.dialects.postgresql import JSONB
+from celery.utils.log import get_task_logger
+
+import requests
+
+logger = get_task_logger(__name__)
 
 
 
@@ -180,6 +189,8 @@ def process_eligible_customers(product_id, filters, type, limit):
                 "full_name": customer.full_name,
                 "sex": customer.sex,
                 "age": customer.age,
+                "email": customer.email,
+                "mobile": customer.mobile,
                 "marital_status": customer.marital_status,
                 "telephone": customer.telephone,
                 "foreign_worker": customer.foreign_worker,
@@ -230,6 +241,81 @@ def process_eligible_customers(product_id, filters, type, limit):
         # Set the processing status to False after completion or failure
         product.processing = False
         db.commit()
+
+    return {"status": "completed", "product_id": product_id}
+
+
+# Create a Celery app instance (assuming it's already configured in your celery_app.py)
+@celery_app.task
+def contact_eligible_customers(product_id):
+    # Create a new session for the task
+    db = next(get_db())
+
+    # Step 1: Retrieve the product and check if it exists
+    product = db.query(Product).filter(Product.id == product_id).first()
+    
+    if not product:
+        raise Exception("Product not found")
+
+    # Retrieve eligible customers from the product
+    eligible_customers = product.eligible_customers
+
+    if not eligible_customers or len(eligible_customers) == 0:
+        raise Exception("No eligible customers found for this product")
+
+    # Define email sender details
+    smtp_host = "smtp.gmail.com"  # For example, Gmail's SMTP server
+    smtp_port = 587
+    sender_email = "kkorankye@itconsortiumgh.com"  # Replace with your email
+    sender_password = "ulzgwpyvjfvxziez"  # Replace with your email password
+
+    # Set up the SMTP server
+    try:
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.starttls()
+        server.login(sender_email, sender_password)
+
+        # Step 2: Loop through eligible customers and send emails
+        for customer_data in eligible_customers:
+            customer = customer_data.get('customer', customer_data.get('nc_info'))
+            print(customer_data)
+            recipient_email = customer.get('email')
+            if recipient_email:
+                # Create the email content
+                msg = MIMEMultipart()
+                msg['From'] = sender_email
+                msg['To'] = recipient_email
+                msg['Subject'] = f"Exclusive Offer for {product.name}"
+
+                # Email body (you can customize this as needed)
+                body = f"Dear {customer.get('full_name', 'Customer')},\n\n"
+                body += f"You are eligible for an exclusive offer for our product: {product.name}.\n"
+                body += "Please contact us for more information.\n\nBest regards,\nITC Credit"
+                msg.attach(MIMEText(body, 'plain'))
+
+                # Send the email
+                server.send_message(msg)
+                print(f"Email sent to {recipient_email}")
+
+                url = "http://52.89.222.13/tfsg/public/api/send"
+                json_data = {"api_key": "ebow:baby",
+                            "merchant_id": 1,
+                            "message": body,
+                            "recipients": [customer.get('mobile')]}
+                response = requests.post(url, json=json_data)
+                print(response)
+
+    except smtplib.SMTPException as e:
+        print(f"Failed to send email: {e}")
+        raise Exception(f"Error sending emails: {e}")
+    
+    except Exception as e:
+        print(e)
+
+    finally:
+        # Close the server connection
+        print('Done')
+        server.quit()
 
     return {"status": "completed", "product_id": product_id}
 

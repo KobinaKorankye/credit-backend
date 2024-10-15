@@ -15,8 +15,7 @@ import csv
 from app.constants import mapping, marital_status_sex_decoder
 from datetime import datetime
 import random
-from app.db.models.customers import Customers  # Assuming these models already exist
-from app.db.models.accounts import Accounts
+from app.db.models.loans import Loans 
 from app.db.models.loan_applications import LoanApplications
 
 # revision identifiers, used by Alembic.
@@ -34,7 +33,7 @@ def generate_random_full_name():
 
 def generate_random_date(start_year=2020, end_year=2024):
     start_date = datetime(start_year, 1, 1)
-    end_date = datetime(end_year, 1, 1)
+    end_date = datetime(end_year, 12, 31, 23, 59, 59)  # End of 2024
     return start_date + (end_date - start_date) * random.random()
 
 def upgrade() -> None:
@@ -48,7 +47,7 @@ def upgrade() -> None:
             reader = csv.DictReader(file)
             for i, row in enumerate(reader):
 
-                if i == 20:
+                if i == 1000:
                     break
 
                 # Create new customer entry with random name using Faker
@@ -60,6 +59,8 @@ def upgrade() -> None:
                     "income": round(random.uniform(2000.0, 10000.0), 2),
                     "marital_status": marital_status_sex['marital_status'],  # Assuming it's included here
                     "telephone": mapping[row['telephone']],
+                    "mobile": '233201161093',
+                    "email": 'eacquahh@gmail.com',
                     "foreign_worker": mapping[row['foreign_worker']]
                 }
 
@@ -100,6 +101,7 @@ def downgrade() -> None:
     session = Session()
 
     # Deleting related data
+    # session.query(Loans).delete(synchronize_session=False)
     session.query(LoanApplications).delete(synchronize_session=False)
 
     session.commit()

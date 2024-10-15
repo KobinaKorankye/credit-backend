@@ -6,7 +6,7 @@ class Accounts(Base):
     __tablename__ = 'accounts'
 
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey('customers.id'), nullable=False)  # Foreign key to customers table
+    customer_id = Column(Integer, ForeignKey('customers.id', ondelete='CASCADE'), nullable=False)  # Foreign key to customers table
     account_number = Column(String(12), unique=True, nullable=False)  # Sequential 12-digit account number
     account_type = Column(String, nullable=False)  # Account type (e.g., 'checking', 'savings')
     balance = Column(Numeric, nullable=False)  # Balance as a Decimal value

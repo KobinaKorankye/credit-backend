@@ -7,7 +7,7 @@ class LoanApplications(Base):
     __tablename__ = 'loan_applications'
 
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey('customers.id'), nullable=True)
+    customer_id = Column(Integer, ForeignKey('customers.id', ondelete='CASCADE'), nullable=True)
     
     # Decision fields
     decision = Column(String, nullable=True)  # 'approved' or 'rejected'

@@ -111,3 +111,61 @@ def get_loan_applications(
         )
 
     return response_data
+
+
+from dateutil.parser import parse as parseISO
+from dateutil.relativedelta import relativedelta
+from datetime import date as dt_date
+
+
+router = APIRouter()
+
+@router.get("/filter-loan-applications-by-date", response_model=List[LoanApplicationResponse])
+async def filter_loan_applications_by_date(
+    filter_type: Optional[str] = Query("all"),
+    date: Optional[dt_date] = Query(None),
+    start_date: Optional[dt_date] = Query(None),
+    end_date: Optional[dt_date] = Query(None),
+    db: Session = Depends(get_db)
+):
+    # Base query
+    query = db.query(LoanApplications)
+    
+    if filter_type == 'all':
+        # No filtering, return all applications
+        results = query.all()
+
+    elif filter_type == 'today':
+        # Filter for today
+        results = query.filter(LoanApplications.date_created == dt_date.today()).all()
+
+    elif filter_type == 'week':
+        # Filter for current week (Monday to Sunday)
+        today = dt_date.today()
+        start_of_week = today - relativedelta(weekday=0)  # Monday
+        results = query.filter(LoanApplications.date_created >= start_of_week).all()
+
+    elif filter_type == 'month':
+        # Filter for current month
+        today = dt_date.today()
+        first_of_month = today.replace(day=1)
+        results = query.filter(LoanApplications.date_created >= first_of_month).all()
+
+    elif filter_type == 'year':
+        # Filter for current year
+        today = dt_date.today()
+        first_of_year = today.replace(month=1, day=1)
+        results = query.filter(LoanApplications.date_created >= first_of_year).all()
+
+    elif filter_type == 'date' and date:
+        # Filter for a specific date
+        results = query.filter(LoanApplications.date_created == date).all()
+
+    elif filter_type == 'date_range' and start_date and end_date:
+        # Filter for a date range
+        results = query.filter(LoanApplications.date_created.between(start_date, end_date)).all()
+
+    else:
+        raise HTTPException(status_code=400, detail="Invalid filter_type or missing date information")
+
+    return results

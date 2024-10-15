@@ -23,6 +23,8 @@ faker = "*"
 celery = "*"
 redis = "*"
 fastapi-socketio = "*"
+requests = "*"
+python-dateutil = "*"
 
 [dev-packages]
 

@@ -35,7 +35,7 @@ def generate_random_full_name():
 
 def generate_random_date(start_year=2020, end_year=2024):
     start_date = datetime(start_year, 1, 1)
-    end_date = datetime(end_year, 1, 1)
+    end_date = datetime(end_year, 12, 31, 23, 59, 59)  # End of 2024
     return start_date + (end_date - start_date) * random.random()
 
 def upgrade() -> None:
@@ -124,7 +124,7 @@ def upgrade() -> None:
                         loan_amount=round(float(row['credit_amount']), 2),
                         interest_rate=round(random.uniform(3.0, 10.0), 2),  # Random interest rate
                         duration_in_months=int(row['duration']),
-                        outcome=row['class'],
+                        outcome=int(row['class']),
                         outcome_date=generate_random_date(2020, 2024),
                         date_created=generate_random_date(2020, 2024),
                         date_updated=generate_random_date(2020, 2024)
@@ -145,6 +145,7 @@ def downgrade() -> None:
     # Deleting related data
     session.query(Loans).delete(synchronize_session=False)
     session.query(LoanApplications).delete(synchronize_session=False)
+    # session.query(Accounts).delete(synchronize_session=False)
     session.query(Customers).delete(synchronize_session=False)
 
     session.commit()

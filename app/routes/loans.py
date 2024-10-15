@@ -35,7 +35,7 @@ class LoanResponse(BaseModel):
     number_of_existing_credits_at_this_bank: int
     job: str
     number_of_people_being_liable_to_provide_maintenance_for: int
-    outcome: Optional[str] = None  # e.g., 'approved', 'defaulted', 'repaid'
+    outcome: Optional[int] = None 
     outcome_date: Optional[datetime] = None  # The date of the loan outcome
 
     class Config:

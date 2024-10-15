@@ -6,6 +6,7 @@ from sqlalchemy import func, or_, and_, not_
 from app.db.database import get_db
 from app.db.models.loan_applications import LoanApplications
 from app.db.models.products import Product
+from app.db.models.loans import Loans
 from app.db.models.customers import Customers
 from app.schemas.product import ProductResponse
 from typing import List, Optional, Dict, Any
@@ -13,13 +14,167 @@ from sqlalchemy.dialects.postgresql import JSONB
 from pydantic import BaseModel
 from datetime import datetime
 from app.ml import predict_list_lite
-
-from cel.tasks import process_eligible_customers
+from datetime import timedelta
+from cel.tasks import process_eligible_customers, contact_eligible_customers
 from fastapi.responses import StreamingResponse
 from celery.result import AsyncResult
 import time
 
 router = APIRouter()
+
+@router.get("/dashboard-data")
+async def get_dashboard_data(
+    date: Optional[str] = None,
+    startDate: Optional[str] = None,
+    endDate: Optional[str] = None,
+    filterType: Optional[str] = 'today',
+    db: Session = Depends(get_db),
+):
+    # Base queries for loan applications and loans
+    loan_applications_query = db.query(LoanApplications)
+    loans_query = db.query(Loans)
+
+    print(f"Filter Type: {filterType}")
+    print(f"Start Date: {startDate}, End Date: {endDate}")
+
+    # Apply the filtering logic only once for both queries
+    if filterType == 'date_range' and startDate and endDate:
+        startDate = datetime.strptime(startDate, '%Y-%m-%d')
+        endDate = datetime.strptime(endDate, '%Y-%m-%d')
+        print(f"Applying date range filter from {startDate} to {endDate}")
+
+        loan_applications_query = loan_applications_query.filter(
+            LoanApplications.date_created >= startDate,
+            LoanApplications.date_created <= (endDate + timedelta(days=1))
+        )
+
+        loans_query = loans_query.filter(
+            Loans.date_created >= startDate,
+            Loans.date_created <= (endDate + timedelta(days=1))
+        )
+
+    elif filterType == 'date' and date:
+        date = datetime.strptime(date, '%Y-%m-%d')
+        print(f"Applying date filter for {date}")
+
+        # Filtering for records created on the specified date
+        loan_applications_query = loan_applications_query.filter(
+            LoanApplications.date_created >= date,
+            LoanApplications.date_created < date + timedelta(days=1)  # Match for the entire day
+        )
+
+        loans_query = loans_query.filter(
+            Loans.date_created >= date,
+            Loans.date_created < date + timedelta(days=1)  # Match for the entire day
+        )
+
+    elif filterType == 'today':
+        today = func.current_date()
+        print(f"Filtering for today: {today}")
+        loan_applications_query = loan_applications_query.filter(func.date(LoanApplications.date_created) == today)
+        loans_query = loans_query.filter(func.date(Loans.date_created) == today)
+
+    elif filterType == 'week':
+        current_week = func.date_trunc('week', func.current_date())
+        print(f"Filtering for current week: {current_week}")
+        loan_applications_query = loan_applications_query.filter(func.date(LoanApplications.date_created) >= current_week)
+        loans_query = loans_query.filter(func.date(Loans.date_created) >= current_week)
+
+    elif filterType == 'month':
+        current_month = func.date_trunc('month', func.current_date())
+        print(f"Filtering for current month: {current_month}")
+        loan_applications_query = loan_applications_query.filter(func.date(LoanApplications.date_created) >= current_month)
+        loans_query = loans_query.filter(func.date(Loans.date_created) >= current_month)
+
+    elif filterType == 'year':
+        current_year = func.date_trunc('year', func.current_date())
+        print(f"Filtering for current year: {current_year}")
+        loan_applications_query = loan_applications_query.filter(func.date(LoanApplications.date_created) >= current_year)
+        loans_query = loans_query.filter(func.date(Loans.date_created) >= current_year)
+
+    # SQL level calculations for number of approved, rejected, and pending applications
+    approved_count = loan_applications_query.filter(LoanApplications.decision == 'approved').count()
+    rejected_count = loan_applications_query.filter(LoanApplications.decision == 'rejected').count()
+    pending_count = loan_applications_query.filter(LoanApplications.decision.is_(None)).count()
+
+    print(f"Approved count: {approved_count}, Rejected count: {rejected_count}, Pending count: {pending_count}")
+
+
+    min_date = db.query(func.min(LoanApplications.date_created)).scalar()
+    max_date = db.query(func.max(LoanApplications.date_created)).scalar()
+
+    # Print the results
+    print(f"Minimum date: {min_date}")
+    print(f"Maximum date: {max_date}")
+
+    # Averages (Daily, Weekly, Monthly, Yearly) based on the filtered data
+    total_apps = loan_applications_query.count()
+    
+    loans_summary = loans_query.with_entities(
+            func.sum(Loans.loan_amount).label('total_disbursed'),
+            func.min(Loans.loan_amount).label('min_loan_amount'),
+            func.max(Loans.loan_amount).label('max_loan_amount'),
+            func.avg(Loans.loan_amount).label('avg_loan_amount')
+        ).first()
+
+    # Non-performing and performing loans (NPL Donut)
+    defaults_sum = loans_query.filter(Loans.outcome == '0').with_entities(func.sum(Loans.loan_amount)).scalar()
+    non_defaults_sum = loans_query.filter(Loans.outcome == '1').with_entities(func.sum(Loans.loan_amount)).scalar()
+
+    print(f"Defaults sum: {defaults_sum}, Non-defaults sum: {non_defaults_sum}")
+
+    # Default rate calculations
+    defaults_count = loans_query.filter(Loans.outcome == '0').count()
+    non_defaults_count = loans_query.filter(Loans.outcome == '1').count()
+
+    print(f"Defaults count: {defaults_count}, Non-defaults count: {non_defaults_count}")
+
+    # Return the dashboard data in the expected format
+    return {
+        "application_stats": {
+            "approved": approved_count,
+            "rejected": rejected_count,
+            "pending": pending_count,
+            "total": total_apps
+        },
+        "loan_stats": {
+            "summary": {
+                "total": loans_summary.total_disbursed or 0,
+                "min": loans_summary.min_loan_amount or 0,
+                "avg": loans_summary.avg_loan_amount or 0,
+                "max": loans_summary.max_loan_amount or 0,
+            },
+            "npl_donut": [
+                {
+                    "name": "Non-Performing",
+                    "value": defaults_sum or 0,
+                    "color": "#DF57BC",
+                    "border": "border-[#DF57BC]"
+                },
+                {
+                    "name": "Performing",
+                    "value": non_defaults_sum or 0,
+                    "color": "#3066BE",
+                    "border": "border-[#3066BE]"
+                },
+            ],
+            "default_rate": [
+                {
+                    "name": "No. of Defaults",
+                    "value": defaults_count,
+                    "color": "#DF57BC",
+                    "border": "border-[#DF57BC]"
+                },
+                {
+                    "name": "No. of Non-defaults",
+                    "value": non_defaults_count,
+                    "color": "#3066BE",
+                    "border": "border-[#3066BE]"
+                }
+            ]
+        }
+    }
+
 
 # Response schema with customer as a nested dictionary
 class LoanApplicationResponse(BaseModel):
@@ -97,6 +252,14 @@ async def get_eligible(
     filters = db.query(Product).filter(Product.id == product_id).first().filters
     task = process_eligible_customers.apply_async(args=[product_id, filters, type, limit])
     return {"status": "processing", "task_id": task.id}
+
+@router.get("/contact-eligible/{product_id}", response_model=Dict[str, Any])
+async def contact_eligible(
+    product_id: int,
+):
+    # Trigger the Celery task
+    task = contact_eligible_customers.apply_async(args=[product_id])
+    return {"status": "sending", "task_id": task.id}
 
 from cel.celery_app import celery_app
 from fastapi.responses import StreamingResponse
