@@ -8,14 +8,14 @@ from app.db.models.loan_applications import LoanApplications
 from app.db.models.products import Product
 from app.db.models.loans import Loans
 from app.db.models.customers import Customers
-from app.schemas.product import ProductResponse
+from app.schemas.dash_stat import DashStatCreate
 from typing import List, Optional, Dict, Any
 from sqlalchemy.dialects.postgresql import JSONB
 from pydantic import BaseModel
 from datetime import datetime
 from app.ml import predict_list_lite
 from datetime import timedelta
-from cel.tasks import process_eligible_customers, contact_eligible_customers
+from cel.tasks import process_eligible_customers, contact_eligible_customers, create_dash_stat
 from fastapi.responses import StreamingResponse
 from celery.result import AsyncResult
 import time
@@ -99,14 +99,6 @@ async def get_dashboard_data(
 
     print(f"Approved count: {approved_count}, Rejected count: {rejected_count}, Pending count: {pending_count}")
 
-
-    min_date = db.query(func.min(LoanApplications.date_created)).scalar()
-    max_date = db.query(func.max(LoanApplications.date_created)).scalar()
-
-    # Print the results
-    print(f"Minimum date: {min_date}")
-    print(f"Maximum date: {max_date}")
-
     # Averages (Daily, Weekly, Monthly, Yearly) based on the filtered data
     total_apps = loan_applications_query.count()
     
@@ -118,14 +110,14 @@ async def get_dashboard_data(
         ).first()
 
     # Non-performing and performing loans (NPL Donut)
-    defaults_sum = loans_query.filter(Loans.outcome == '0').with_entities(func.sum(Loans.loan_amount)).scalar()
-    non_defaults_sum = loans_query.filter(Loans.outcome == '1').with_entities(func.sum(Loans.loan_amount)).scalar()
+    defaults_sum = loans_query.filter(Loans.outcome == 0).with_entities(func.sum(Loans.loan_amount)).scalar()
+    non_defaults_sum = loans_query.filter(Loans.outcome == 1).with_entities(func.sum(Loans.loan_amount)).scalar()
 
     print(f"Defaults sum: {defaults_sum}, Non-defaults sum: {non_defaults_sum}")
 
     # Default rate calculations
-    defaults_count = loans_query.filter(Loans.outcome == '0').count()
-    non_defaults_count = loans_query.filter(Loans.outcome == '1').count()
+    defaults_count = loans_query.filter(Loans.outcome == 0).count()
+    non_defaults_count = loans_query.filter(Loans.outcome == 1).count()
 
     print(f"Defaults count: {defaults_count}, Non-defaults count: {non_defaults_count}")
 
@@ -200,19 +192,38 @@ class LoanApplicationResponse(BaseModel):
         orm_mode = True
 
 # Recursive filter builder
+from sqlalchemy import cast, String, Integer, Float
+
 def build_filter_query(filter_obj, model, customer_alias, nc_info_column):
     if 'attribute' in filter_obj:
         attribute = filter_obj['attribute']
         operation = filter_obj['operation']
         operand = filter_obj['operand']
 
+        # Type inference based on the structure of nc_info
+        type_mapping = {
+            'full_name': String,
+            'sex': String,
+            'age': Integer,
+            'income': Float,
+            'marital_status': String,
+            'telephone': String,
+            'mobile': String,
+            'email': String,
+            'foreign_worker': String
+        }
+
         # Check where the attribute resides: LoanApplications, nc_info (JSONB), or Customers
         if hasattr(model, attribute):
             column = getattr(model, attribute)  # Attribute is in LoanApplications
-        elif hasattr(customer_alias, attribute):
+        elif customer_alias and hasattr(customer_alias, attribute):
             column = getattr(customer_alias, attribute)  # Attribute is in Customers
-        elif isinstance(nc_info_column, JSONB):
-            column = nc_info_column[attribute]  # Attribute is in nc_info JSONB
+        elif nc_info_column is not None:
+            # Attribute is in nc_info JSONB
+            if attribute in type_mapping:
+                column = cast(nc_info_column[attribute].astext, type_mapping[attribute])
+            else:
+                column = nc_info_column[attribute].astext  # Default to text if no type mapping is found
         else:
             raise AttributeError(f"Attribute '{attribute}' not found in any table")
 
@@ -259,6 +270,15 @@ async def contact_eligible(
 ):
     # Trigger the Celery task
     task = contact_eligible_customers.apply_async(args=[product_id])
+    return {"status": "sending", "task_id": task.id}
+
+@router.post("/create-dash-stats", response_model=Dict[str, Any])
+async def create_dashboard_statistics(
+    dash_stat_data: DashStatCreate,
+):
+    data = dash_stat_data.dict()
+    # Trigger the Celery task
+    task = create_dash_stat.apply_async(args=[data['name'], data['start_date'], data['end_date']])
     return {"status": "sending", "task_id": task.id}
 
 from cel.celery_app import celery_app

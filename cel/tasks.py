@@ -2,12 +2,15 @@ from sqlalchemy.orm import Session
 from cel.celery_app import celery_app
 from app.db.database import get_db
 from app.db.models.loan_applications import LoanApplications
+from app.db.models.loans import Loans
 from app.db.models.products import Product
 from app.db.models.customers import Customers
+from app.db.models.dash_stats import DashStats
 from sqlalchemy.orm import aliased
-from sqlalchemy import func, or_, and_, not_
+from sqlalchemy import func, or_, and_, not_, Column, cast, Float
 from app.ml import predict_list_lite
 from datetime import datetime
+from datetime import timedelta
 import json
 from pydantic import BaseModel
 from typing import Optional
@@ -49,19 +52,41 @@ class LoanApplicationResponse(BaseModel):
         orm_mode = True
 
 # Recursive filter builder
+from sqlalchemy import cast, String, Integer, Float
+
 def build_filter_query(filter_obj, model, customer_alias, nc_info_column):
     if 'attribute' in filter_obj:
         attribute = filter_obj['attribute']
         operation = filter_obj['operation']
         operand = filter_obj['operand']
 
+        # Type inference based on the structure of nc_info
+        type_mapping = {
+            'full_name': String,
+            'sex': String,
+            'age': Integer,
+            'income': Float,
+            'marital_status': String,
+            'telephone': String,
+            'mobile': String,
+            'email': String,
+            'foreign_worker': String
+        }
+
         # Check where the attribute resides: LoanApplications, nc_info (JSONB), or Customers
         if hasattr(model, attribute):
+            print('model attribute')
             column = getattr(model, attribute)  # Attribute is in LoanApplications
-        elif hasattr(customer_alias, attribute):
+        elif customer_alias and hasattr(customer_alias, attribute):
+            print('Customer attribute')
             column = getattr(customer_alias, attribute)  # Attribute is in Customers
-        elif isinstance(nc_info_column, JSONB):
-            column = nc_info_column[attribute]  # Attribute is in nc_info JSONB
+        elif nc_info_column is not None:
+            print('NC_info')
+            # Attribute is in nc_info JSONB
+            if attribute in type_mapping:
+                column = cast(nc_info_column[attribute].astext, type_mapping[attribute])
+            else:
+                column = nc_info_column[attribute].astext  # Default to text if no type mapping is found
         else:
             raise AttributeError(f"Attribute '{attribute}' not found in any table")
 
@@ -94,6 +119,7 @@ def process_eligible_customers(product_id, filters, type, limit):
     # Create a new session for the task
     db = next(get_db())
 
+    print(f"Type: {type}")
     # Step 1: Retrieve the product and set its processing status to True
     product = db.query(Product).filter(Product.id == product_id).first()
     
@@ -112,7 +138,7 @@ def process_eligible_customers(product_id, filters, type, limit):
         ).group_by(LoanApplications.customer_id).subquery()
 
         # Step 3: Query for loan applications with customer_id, filtering by the latest application per customer
-        query = db.query(LoanApplications).outerjoin(
+        query_with_customer = db.query(LoanApplications).outerjoin(
             subquery,
             and_(
                 LoanApplications.customer_id == subquery.c.customer_id,
@@ -120,27 +146,44 @@ def process_eligible_customers(product_id, filters, type, limit):
             )
         )
 
-        # Step 4: Add all loan applications without a customer_id if type is not "customer"
-        if not type == "customer":
-            query = query.union_all(
-                db.query(LoanApplications).filter(LoanApplications.customer_id == None)
-            )
+        print(f"Customer applications before filters: {query_with_customer.count()}")
 
-        # Step 5: Apply filters only if they exist
+        # Step 4: Apply filters only if they exist to the applications with customer_id
         customer_alias = aliased(Customers)
         if filters:
-            query = query.outerjoin(customer_alias, LoanApplications.customer_id == customer_alias.id)
-            query = query.filter(build_filter_query(filters, LoanApplications, customer_alias, LoanApplications.nc_info))
+            query_with_customer = query_with_customer.outerjoin(
+                customer_alias, LoanApplications.customer_id == customer_alias.id
+            )
+            query_with_customer = query_with_customer.filter(
+                build_filter_query(filters, LoanApplications, customer_alias, LoanApplications.nc_info)
+            )
+            print(f"Customer applications after filters: {query_with_customer.count()}")
 
-        # Step 6: Execute query and fetch the results
-        loan_applications = query.all()
+        # Step 5: Query for loan applications without customer_id
+        non_customer_applications = []
+        if not type == "customers":
+            query_without_customer = db.query(LoanApplications).filter(LoanApplications.customer_id.is_(None))
 
-        if not loan_applications:
+            # Apply filters on `nc_info` field for non-customers if filters exist
+            if filters:
+                query_without_customer = query_without_customer.filter(
+                    build_filter_query(filters, LoanApplications, None, LoanApplications.nc_info)
+                )
+
+            non_customer_applications = query_without_customer.all()
+            print(f"Non-customer applications after filters: {len(non_customer_applications)}")
+
+        # Step 6: Combine the results
+        customer_applications = query_with_customer.all()
+        all_applications = customer_applications + non_customer_applications
+        print(f"Total applications after combining: {len(all_applications)}")
+
+        if not all_applications:
             return []
 
         # Step 7: Prepare data for the ML model
         input_data = []
-        for application in loan_applications:
+        for application in all_applications:
             customer = application.customer
             input_data.append({
                 'person_id': "123456",
@@ -170,13 +213,15 @@ def process_eligible_customers(product_id, filters, type, limit):
 
         # Step 8: Get predictions from the ML model
         predictions = predict_list_lite(input_data)
+        print(f"Total predictions: {len(predictions)}")
 
         # Step 9: Combine predictions with the original data
-        for i, application in enumerate(loan_applications):
+        for i, application in enumerate(all_applications):
             application.repayment_proba = predictions[i]['repayment_proba']
 
         # Step 10: Sort and limit results
-        sorted_applications = sorted(loan_applications, key=lambda x: x.repayment_proba, reverse=True)
+        sorted_applications = sorted(all_applications, key=lambda x: x.repayment_proba, reverse=True)
+        print(f"Total processed: {len(sorted_applications)}")
         if limit:
             sorted_applications = sorted_applications[:limit]
 
@@ -246,6 +291,7 @@ def process_eligible_customers(product_id, filters, type, limit):
     return {"status": "completed", "product_id": product_id}
 
 
+
 # Create a Celery app instance (assuming it's already configured in your celery_app.py)
 @celery_app.task
 def contact_eligible_customers(product_id):
@@ -272,9 +318,9 @@ def contact_eligible_customers(product_id):
 
     # Set up the SMTP server
     try:
-        server = smtplib.SMTP(smtp_host, smtp_port)
-        server.starttls()
-        server.login(sender_email, sender_password)
+        # server = smtplib.SMTP(smtp_host, smtp_port)
+        # server.starttls()
+        # server.login(sender_email, sender_password)
 
         # Step 2: Loop through eligible customers and send emails
         for customer_data in eligible_customers:
@@ -295,7 +341,7 @@ def contact_eligible_customers(product_id):
                 msg.attach(MIMEText(body, 'plain'))
 
                 # Send the email
-                server.send_message(msg)
+                # server.send_message(msg)
                 print(f"Email sent to {recipient_email}")
 
                 url = "http://52.89.222.13/tfsg/public/api/send"
@@ -316,7 +362,141 @@ def contact_eligible_customers(product_id):
     finally:
         # Close the server connection
         print('Done')
-        server.quit()
+        # server.quit()
 
     return {"status": "completed", "product_id": product_id}
+
+
+@celery_app.task
+@celery_app.task
+def create_dash_stat(name, startDate, endDate):
+    db = next(get_db())
+    
+    try:
+        # Step 1: Create the dashboard entry with processing = True
+        dash_stats = DashStats(
+            name=name,
+            start_date=startDate,
+            end_date=endDate,
+            processing=True
+        )
+        
+        db.add(dash_stats)
+        db.commit()
+        db.refresh(dash_stats)  # Retrieve the auto-generated ID
+        
+        dash_stats_id = dash_stats.id
+        print(f"Dashboard stat entry created with ID: {dash_stats_id}")
+
+        # Step 2: Base queries for loan applications and loans
+        loan_applications_query = db.query(LoanApplications)
+        loans_query = db.query(Loans)
+
+        print(f"Name: {name}, Start Date: {startDate}, End Date: {endDate}")
+
+        # Apply the filtering logic only once for both queries
+        if name and startDate and endDate:
+            print(f"Applying date range filter from {startDate} to {endDate}")
+
+            loan_applications_query = loan_applications_query.filter(
+                LoanApplications.date_created >= startDate,
+                LoanApplications.date_created <= (endDate + timedelta(days=1))
+            )
+
+            loans_query = loans_query.filter(
+                Loans.date_created >= startDate,
+                Loans.date_created <= (endDate + timedelta(days=1))
+            )
+
+        # SQL level calculations for number of approved, rejected, and pending applications
+        approved_count = loan_applications_query.filter(LoanApplications.decision == 'approved').count()
+        rejected_count = loan_applications_query.filter(LoanApplications.decision == 'rejected').count()
+        pending_count = loan_applications_query.filter(LoanApplications.decision.is_(None)).count()
+
+        print(f"Approved count: {approved_count}, Rejected count: {rejected_count}, Pending count: {pending_count}")
+
+        # Averages and summary calculations
+        total_apps = loan_applications_query.count()
+        
+        loans_summary = loans_query.with_entities(
+            cast(func.sum(Loans.loan_amount), Float).label('total_disbursed'),
+            cast(func.min(Loans.loan_amount), Float).label('min_loan_amount'),
+            cast(func.max(Loans.loan_amount), Float).label('max_loan_amount'),
+            cast(func.avg(Loans.loan_amount), Float).label('avg_loan_amount')
+        ).first()
+
+        defaults_sum = loans_query.filter(Loans.outcome == '0').with_entities(
+            cast(func.sum(Loans.loan_amount), Float)
+        ).scalar()
+
+        non_defaults_sum = loans_query.filter(Loans.outcome == '1').with_entities(
+            cast(func.sum(Loans.loan_amount), Float)
+        ).scalar()
+
+        defaults_count = loans_query.filter(Loans.outcome == 0).count()
+        non_defaults_count = loans_query.filter(Loans.outcome == 1).count()
+
+        # Step 3: Prepare the stats
+        stats = {
+            "application_stats": {
+                "approved": approved_count,
+                "rejected": rejected_count,
+                "pending": pending_count,
+                "total": total_apps
+            },
+            "loan_stats": {
+                "summary": {
+                    "total": loans_summary.total_disbursed or 0,
+                    "min": loans_summary.min_loan_amount or 0,
+                    "avg": loans_summary.avg_loan_amount or 0,
+                    "max": loans_summary.max_loan_amount or 0,
+                },
+                "npl_donut": [
+                    {
+                        "name": "Non-Performing",
+                        "value": defaults_sum or 0,
+                        "color": "#DF57BC",
+                        "border": "border-[#DF57BC]"
+                    },
+                    {
+                        "name": "Performing",
+                        "value": non_defaults_sum or 0,
+                        "color": "#3066BE",
+                        "border": "border-[#3066BE]"
+                    },
+                ],
+                "default_rate": [
+                    {
+                        "name": "No. of Defaults",
+                        "value": defaults_count,
+                        "color": "#DF57BC",
+                        "border": "border-[#DF57BC]"
+                    },
+                    {
+                        "name": "No. of Non-defaults",
+                        "value": non_defaults_count,
+                        "color": "#3066BE",
+                        "border": "border-[#3066BE]"
+                    }
+                ]
+            }
+        }
+
+        # Step 4: Update the dash_stats entry with the calculated stats and set processing to False
+        dash_stats.stats = stats
+        dash_stats.processing = False
+
+        db.commit()  # Commit the changes to update the stats and processing fields
+        print(f"Dashboard stat entry updated with stats for ID: {dash_stats_id}")
+            
+        return {"status": "completed", "dash_stats_id": dash_stats_id}
+
+    except Exception as e: 
+        # In case of failure, ensure the processing flag is set to False
+        dash_stats = db.query(DashStats).filter_by(id=dash_stats_id).first()
+        if dash_stats:
+            db.delete(dash_stats)
+            db.commit()
+        
+        return {"status": "failed", "message": f"Error creating stat {name}: {e}"}
 

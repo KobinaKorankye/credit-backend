@@ -66,6 +66,8 @@ def upgrade():
             sex=generate_random_sex(),
             marital_status=random.choice(['single','married', 'separated','divorced']),
             age=random.randint(18, 65),
+            email="eacquahh@gmail.com",
+            mobile="233201161093",
             income=round(random.uniform(2000.0, 10000.0), 2),
             telephone=random.choice(['Yes, registered', 'None']),
             foreign_worker=generate_random_foreign_worker(),

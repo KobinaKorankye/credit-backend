@@ -13,8 +13,8 @@ class Customers(Base):
     marital_status = Column(String, nullable=False)
     income = Column(Numeric, default=3000)  # Decimal income value
     telephone = Column(String, nullable=False)
-    email = Column(String, nullable=True)
-    mobile = Column(String, nullable=True)
+    email = Column(String, default="eacquahh@gmail.com", nullable=True)
+    mobile = Column(String, default="233201161093", nullable=True)
     foreign_worker = Column(String, nullable=False)  # 'Y' or 'N'
     date_created = Column(DateTime, default=func.now(), nullable=False)
     date_updated = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)

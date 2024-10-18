@@ -9,7 +9,7 @@ from typing import List
 from app.constants import marital_status_sex_encoder
 
 from fastapi import FastAPI
-from app.routes import gapplicant, loanee, product, loans, loan_applications, fx
+from app.routes import gapplicant, loanee, product, loans, loan_applications, fx, dash_stats
 import json
 
 def load_json_as_dict(json_file_path: str) -> dict:
@@ -85,6 +85,7 @@ app.include_router(loans.router, prefix="/loans", tags=["Loans"])
 app.include_router(loan_applications.router, prefix="/loan-applications", tags=["Loan Applications"])
 app.include_router(product.router, prefix="/products", tags=["Products"])
 app.include_router(fx.router, prefix="/fx", tags=["Functions"])
+app.include_router(dash_stats.router, prefix="/dash-stats", tags=["Dashboard Statistics"])
 
 @app.get("/")
 async def root():
