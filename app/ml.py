@@ -69,6 +69,8 @@ def predict(input):
         'customer_id': person_id[0],
         'customer_name': generate_name_from_id(person_id[0]),
         'proba': float(pred[np.argmax(pred)]),
+        'default_proba': float(pred[0]),
+        'repayment_proba': float(pred[1]),
         # 'prediction': "Possible Non Defaulter" if int(np.argmax(pred)) == 0 else "Possible Defaulter",
         'prediction': "Possible Defaulter" if int(np.argmax(pred)) == 0 else "Possible Non Defaulter",
         # 'model_decision': f"{generate_name_from_id(person_id[0])} is {'not likely to default' if np.argmax(pred) == 0 else 'likely to default'} with {(float(pred[np.argmax(pred)])*100):.4f}% probability",

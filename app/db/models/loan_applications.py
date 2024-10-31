@@ -12,7 +12,15 @@ class LoanApplications(Base):
     # Decision fields
     decision = Column(String, nullable=True)  # 'approved' or 'rejected'
     decision_date = Column(DateTime, nullable=True)  # Date when the decision was made
-    notes = Column(String, nullable=True)  # Approval or rejection notes
+
+    officer_notes = Column(String, nullable=True)  # Approval or rejection notes
+    officer_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+
+    reviewer_notes = Column(String, nullable=True)  # Approval or rejection notes
+    reviewer_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+
+    approver_notes = Column(String, nullable=True)  # Approval or rejection notes
+    approver_id = Column(Integer, ForeignKey('users.id'), nullable=True)
 
     # Additional fields from the Loanee table
 
@@ -54,3 +62,7 @@ class LoanApplications(Base):
 
     # Relationship with the customer (if needed)
     customer = relationship("Customers")
+    
+    officer = relationship("Users", foreign_keys=[officer_id])
+    reviewer = relationship("Users", foreign_keys=[reviewer_id])
+    approver = relationship("Users", foreign_keys=[approver_id])

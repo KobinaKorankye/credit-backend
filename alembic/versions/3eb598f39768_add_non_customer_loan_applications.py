@@ -101,7 +101,7 @@ def downgrade() -> None:
     session = Session()
 
     # Deleting related data
-    # session.query(Loans).delete(synchronize_session=False)
+    session.query(Loans).delete(synchronize_session=False)
     session.query(LoanApplications).delete(synchronize_session=False)
 
     session.commit()

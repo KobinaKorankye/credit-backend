@@ -6,3 +6,4 @@ from app.db.models.accounts import Accounts
 from app.db.models.loans import Loans
 from app.db.models.loan_applications import LoanApplications
 from app.db.models.dash_stats import DashStats
+from app.db.models.users import Users

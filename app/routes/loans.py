@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models.loans import Loans
@@ -37,15 +37,28 @@ class LoanResponse(BaseModel):
     number_of_people_being_liable_to_provide_maintenance_for: int
     outcome: Optional[int] = None 
     outcome_date: Optional[datetime] = None  # The date of the loan outcome
-
+    date_created: Optional[datetime] = None
+    date_updated: Optional[datetime] = None
     class Config:
         orm_mode = True  # Enable automatic conversion from ORM objects to Pydantic models
 
 
 @router.get("/", response_model=List[LoanResponse])
-def get_loanees(db: Session = Depends(get_db)):
+def get_loanees(
+    outcome: Optional[str] = Query("all"),
+    db: Session = Depends(get_db)
+    ):
     # Query the Loans table and access related LoanApplications and Customers via relationships
-    loans = db.query(Loans).all()
+    if outcome == "all":
+        loans = db.query(Loans).all()
+    elif outcome == "pending":
+        loans = db.query(Loans).filter(Loans.outcome.is_(None)).all()
+    elif outcome == "completed":
+        loans = db.query(Loans).filter(Loans.outcome.is_not(None)).all()
+    elif outcome == "defaulted":
+        loans = db.query(Loans).filter(Loans.outcome == 0).all()
+    elif outcome == "repaid":
+        loans = db.query(Loans).filter(Loans.outcome == 1).all()
 
     if not loans:
         raise HTTPException(status_code=404, detail="No loans found")
@@ -83,7 +96,9 @@ def get_loanees(db: Session = Depends(get_db)):
             job=application.job,
             number_of_people_being_liable_to_provide_maintenance_for=application.number_of_people_being_liable_to_provide_maintenance_for,
             outcome=loan.outcome,  # Use loan outcome (e.g., 'approved', 'defaulted', 'repaid')
-            outcome_date=loan.outcome_date  # Use loan outcome date
+            outcome_date=loan.outcome_date,  # Use loan outcome date
+            date_created=loan.date_created,
+            date_updated=loan.date_updated
         )
 
         response_data.append(loan_response)

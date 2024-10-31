@@ -94,7 +94,6 @@ def upgrade() -> None:
                     loan_amount_requested=round(float(row['credit_amount']),2),
                     decision='approved',  # Randomly decide approval or rejection
                     decision_date=generate_random_date(2020, 2024),
-                    notes="Processed loan application",  # General notes
                     duration_in_months=int(row['duration']),
                     status_of_existing_checking_account=mapping[row['status_of_existing_checking_account']],
                     credit_history=mapping[row['credit_history']],

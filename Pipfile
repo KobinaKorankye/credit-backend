@@ -25,6 +25,9 @@ redis = "*"
 fastapi-socketio = "*"
 requests = "*"
 python-dateutil = "*"
+firebase-admin = "*"
+bcrypt = "*"
+passlib = "*"
 
 [dev-packages]
 
