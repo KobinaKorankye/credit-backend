@@ -30,5 +30,5 @@ class Loanee(Base):
 
     
     # New fields for tracking creation and update times
-    # date_created = Column(DateTime, default=func.now(), nullable=False)
-    # date_updated = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    date_created = Column(DateTime, default=func.now(), nullable=False)
+    date_updated = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
