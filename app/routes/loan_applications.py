@@ -49,6 +49,60 @@ class LoanApplicationResponse(BaseModel):
     class Config:
         orm_mode = True
 
+class LoanApplicationCreate(BaseModel):
+    loan_amount_requested: float
+    duration_in_months: int
+    status_of_existing_checking_account: str
+    credit_history: str
+    purpose: str
+    savings_account_bonds: str
+    present_employment_since: str
+    installment_rate_in_percentage_of_disposable_income: int
+    other_debtors_guarantors: str
+    present_residence_since: int
+    property: str
+    other_installment_plans: str
+    housing: str
+    number_of_existing_credits_at_this_bank: int
+    job: str
+    number_of_people_being_liable_to_provide_maintenance_for: int
+    nc_info: Optional[dict] = None  # Dictionary for non-customer info
+
+    class Config:
+        orm_mode = True
+
+@router.post("", response_model=LoanApplicationResponse)
+async def create_loan_application(
+    application_data: LoanApplicationCreate,
+    db: Session = Depends(get_db)
+):
+    # Create a new LoanApplications instance with the provided data
+    new_application = LoanApplications(
+        loan_amount_requested=application_data.loan_amount_requested,
+        duration_in_months=application_data.duration_in_months,
+        status_of_existing_checking_account=application_data.status_of_existing_checking_account,
+        credit_history=application_data.credit_history,
+        purpose=application_data.purpose,
+        savings_account_bonds=application_data.savings_account_bonds,
+        present_employment_since=application_data.present_employment_since,
+        installment_rate_in_percentage_of_disposable_income=application_data.installment_rate_in_percentage_of_disposable_income,
+        other_debtors_guarantors=application_data.other_debtors_guarantors,
+        present_residence_since=application_data.present_residence_since,
+        property=application_data.property,
+        other_installment_plans=application_data.other_installment_plans,
+        housing=application_data.housing,
+        number_of_existing_credits_at_this_bank=application_data.number_of_existing_credits_at_this_bank,
+        job=application_data.job,
+        number_of_people_being_liable_to_provide_maintenance_for=application_data.number_of_people_being_liable_to_provide_maintenance_for,
+        nc_info=application_data.nc_info,
+    )
+
+    # Add and commit the new loan application to the database
+    db.add(new_application)
+    db.commit()
+    db.refresh(new_application)
+
+    return new_application
 
 @router.get("", response_model=List[LoanApplicationResponse])
 def get_loan_applications(
