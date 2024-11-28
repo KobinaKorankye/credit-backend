@@ -20,6 +20,8 @@ from fastapi.responses import StreamingResponse
 from celery.result import AsyncResult
 import time
 
+primary = "#3066BE"
+
 router = APIRouter()
 
 @router.get("/dashboard-data")
@@ -146,8 +148,8 @@ async def get_dashboard_data(
                 {
                     "name": "Performing",
                     "value": non_defaults_sum or 0,
-                    "color": "#3066BE",
-                    "border": "border-[#3066BE]"
+                    "color": primary,
+                    "border": f"border-[{primary}]"
                 },
             ],
             "default_rate": [
@@ -160,8 +162,8 @@ async def get_dashboard_data(
                 {
                     "name": "No. of Non-defaults",
                     "value": non_defaults_count,
-                    "color": "#3066BE",
-                    "border": "border-[#3066BE]"
+                    "color": primary,
+                    "border": f"border-{primary}]"
                 }
             ]
         }

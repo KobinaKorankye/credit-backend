@@ -60,8 +60,8 @@ def get_loanees(
     elif outcome == "repaid":
         loans = db.query(Loans).filter(Loans.outcome == 1).all()
 
-    if not loans:
-        raise HTTPException(status_code=404, detail="No loans found")
+    # if not loans:
+    #     raise HTTPException(status_code=404, detail="No loans found")
 
     # Transform the data to match the LoanResponse structure
     response_data = []
